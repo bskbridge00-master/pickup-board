@@ -1,0 +1,776 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>주간 픽업 일정</title>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body {
+      background-color: #000000;
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Malgun Gothic', '맑은 고딕', sans-serif;
+      color: #e8e8e8;
+      height: 100vh;
+      overflow: hidden;
+      padding: 8px;
+    }
+    .container {
+      height: 100%;
+      border: 1px solid #2a2a4a;
+      border-radius: 6px;
+      overflow: hidden;
+    }
+    table {
+      width: 100%;
+      height: 100%;
+      border-collapse: collapse;
+      table-layout: fixed;
+    }
+    thead th {
+      background-color: #1a1a2e;
+      color: #e0e0ff;
+      font-size: 33px;
+      font-weight: bold;
+      padding: 8px 16px;
+      text-align: center;
+      border-bottom: 2px solid #3a3a5c;
+    }
+    thead th.col-day {
+      width: 8%;
+      white-space: nowrap;
+    }
+    thead th.col-regular {
+      width: 68%;
+      border-left: 1px solid #2a2a4a;
+    }
+    thead th.col-fresh {
+      width: 24%;
+      border-left: 1px solid #2a2a4a;
+    }
+    tbody tr:nth-child(odd) { background-color: #0d0d0d; }
+    tbody tr:nth-child(even) { background-color: #141414; }
+    tbody td {
+      border-bottom: 1px solid #2a2a4a;
+      vertical-align: top;
+      padding: 12px 16px;
+    }
+    tbody td.day-cell {
+      text-align: center;
+      vertical-align: middle;
+      border-right: 1px solid #2a2a4a;
+      padding: 12px 8px;
+    }
+    .day-badge {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      width: 40px;
+      min-height: 40px;
+      border-radius: 6px;
+      background-color: #1a1a2e;
+      color: #8a8aff;
+      font-weight: bold;
+      font-size: 28px;
+    }
+    tbody td.content-cell {
+      font-size: 25px;
+      color: #e8e8e8;
+      border-left: 1px solid #2a2a4a;
+      line-height: 1.6;
+    }
+    .empty-cell { color: #555; }
+    .loading {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      height: 100%;
+      font-size: 24px;
+      color: #8a8aff;
+    }
+    .error-msg {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      height: 100%;
+      font-size: 18px;
+      color: #ff6b6b;
+      gap: 12px;
+      padding: 20px;
+    }
+    .error-msg button {
+      padding: 8px 20px;
+      background: #1a1a2e;
+      color: #e0e0ff;
+      border: 1px solid #3a3a5c;
+      border-radius: 6px;
+      cursor: pointer;
+      font-size: 20px;
+    }
+    .error-msg button:hover { background: #2a2a4a; }
+    .th-content { display: flex; align-items: center; justify-content: center; gap: 8px; }
+    .icon { width: 20px; height: 20px; }
+    .help-text { font-size: 14px; color: #888; line-height: 1.8; text-align: center; }
+
+    /* ✅ 오늘(현재 요일) 하이라이트: 해당 요일(행) 전체 강조 */
+    tr.today-row td {
+      background: rgba(255, 215, 0, 0.20);
+    }
+    tr.today-row td.day-cell {
+      background: rgba(255, 215, 0, 0.35);
+    }
+    .day-badge.today {
+      box-shadow: 0 0 0 2px rgba(255, 215, 0, 0.8);
+      background-color: rgba(255, 215, 0, 0.4);
+      color: #000000;
+    }
+    /* 오늘 날짜 라벨도 살짝 강조 */
+    .today-date {
+      color: #FFD700 !important;
+      font-weight: 700;
+    }
+
+
+    /* ✅ FHD 고정 표시: 6행(월~토)이 화면에 항상 모두 보이도록 */
+    table { height: 100%; }
+    tbody td.content-cell {
+      overflow: hidden;
+      word-break: keep-all;
+      white-space: normal;
+    }
+    .cell-text {
+      display: -webkit-box;
+      -webkit-box-orient: vertical;
+      overflow: hidden;
+      line-height: 1.35;
+    }
+
+  
+    /* ✅ 행 높이는 데이터량에 따라 가변(월~토는 모두 화면에 표시) */
+    tbody tr { height: auto; }
+
+    /* 글자 크기는 고정 (셀 높이로 해결) */
+    tbody td.content-cell { 
+      font-size: 25px;
+      line-height: 1.35;
+      white-space: normal;
+      word-break: keep-all;
+      overflow: hidden;
+    }
+    /* 정기공구/신선공구 기본 글자 크기 살짝 구분(원하면 동일하게도 가능) */
+    tbody td.content-cell.regular { font-size: 24px; }
+    tbody td.content-cell.fresh { font-size: 22px; }
+
+  
+    /* ✅ 부드러운 갱신(페이드) */
+    .fade-layer {
+      position: fixed;
+      inset: 0;
+      background: rgba(0,0,0,0.0);
+      pointer-events: none;
+      opacity: 0;
+      transition: opacity 0.35s ease;
+      z-index: 9998;
+    }
+    .fade-layer.show {
+      opacity: 1;
+      background: rgba(0,0,0,0.22);
+    }
+
+  
+    
+    /* 📱 모바일 최적화 v2: 더 작은 글씨 + 요일 컬럼 정리 */
+    @media (max-width: 768px) {
+      body {
+        height: auto;
+        overflow: auto;
+        padding: 6px;
+      }
+
+      .container {
+        height: auto;
+        min-height: 100vh;
+      }
+
+      table {
+        height: auto;
+      }
+
+      tbody tr {
+        height: auto !important;
+      }
+
+      thead th {
+        font-size: 16px;
+        padding: 6px 6px;
+      }
+
+      /* 요일 컬럼 폭 축소 */
+      thead th.col-day {
+        width: 12%;
+      }
+
+      .day-badge {
+        width: 26px;
+        min-height: 26px;
+        font-size: 14px;
+        border-radius: 4px;
+      }
+
+      tbody td {
+        padding: 8px 6px;
+      }
+
+      tbody td.day-cell {
+        padding: 6px 4px;
+      }
+
+      tbody td.content-cell {
+        font-size: 14px !important;
+        line-height: 1.3;
+      }
+
+      tbody td.content-cell.fresh {
+        font-size: 13px !important;
+      }
+
+      .th-content {
+        flex-direction: column;
+        gap: 2px;
+      }
+
+      .th-content .icon {
+        display: none;
+      }
+    }
+
+    /* 📱 모바일 카드형 UI */
+    @media (max-width: 768px) {
+      #tableView { display: none; }
+      #mobileView { display: block; padding: 6px; }
+    }
+    @media (min-width: 769px) {
+      #mobileView { display: none; }
+    }
+
+    .day-card {
+      background: #111;
+      border: 1px solid #2a2a4a;
+      border-radius: 10px;
+      padding: 12px;
+      margin-bottom: 12px;
+    }
+    .day-card h3 {
+      margin: 0 0 8px 0;
+      font-size: 16px;
+      color: #FFD700;
+    }
+    .card-section {
+      margin-bottom: 6px;
+      font-size: 14px;
+      line-height: 1.4;
+    }
+    .card-section strong {
+      display: block;
+      font-size: 13px;
+      margin-bottom: 3px;
+      color: #aaa;
+    }
+
+  
+    
+    /* 📱 오늘 카드 강화 스타일 */
+    .day-card.today-card {
+      border: 2px solid #FFD700;
+      background: linear-gradient(180deg, #2a2200 0%, #141100 100%);
+      box-shadow: 0 0 22px rgba(255, 215, 0, 0.35);
+    }
+    .day-card.today-card h3 {
+      color: #FFD700;
+      font-weight: 900;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+    }
+    .today-badge {
+      background: #FFD700;
+      color: #000;
+      font-size: 11px;
+      font-weight: 900;
+      padding: 3px 6px;
+      border-radius: 20px;
+    }
+    .day-card.today-card .card-section {
+      font-weight: 800;
+      color: #FFF3B0;
+    }
+
+
+  
+    /* 📱 오늘 픽업 배너 */
+    .today-pickup-banner {
+      background: linear-gradient(90deg, #FFD700, #FFC300);
+      color: #000;
+      font-size: 12px;
+      font-weight: 900;
+      text-align: center;
+      padding: 4px 0;
+      border-radius: 6px;
+      margin-bottom: 6px;
+      letter-spacing: 0.5px;
+    }
+
+  </style>
+</head>
+<body>
+  <div class="container" id="app">
+    <div id="tableView"></div>
+    <div id="mobileView"></div>
+    <div class="loading">데이터를 불러오는 중...</div>
+  </div>
+
+
+  <!-- ✅ 상태/오류 오버레이 (네트워크 오류 시 자동 재시도 표시) -->
+  <div id="statusOverlay" style="
+    position: fixed; inset: 0; display: none; align-items: center; justify-content: center;
+    background: rgba(0,0,0,0.55); z-index: 9999;">
+    <div style="
+      width: min(720px, 92vw);
+      background: #0d0d0d;
+      border: 1px solid #3a3a5c;
+      border-radius: 10px;
+      padding: 18px 20px;
+      color: #e8e8e8;
+      box-shadow: 0 10px 30px rgba(0,0,0,0.5);
+    ">
+      <div style="font-size: 20px; font-weight: 800; color:#FFD700; margin-bottom: 10px;">연결 상태</div>
+      <div id="statusMsg" style="font-size: 16px; line-height: 1.6; color:#ddd; margin-bottom: 12px;">-</div>
+      <div style="display:flex; gap:10px; align-items:center; justify-content: space-between; flex-wrap: wrap;">
+        <div id="retryInfo" style="font-size: 14px; color:#aaa;">-</div>
+        <button id="retryNowBtn" style="
+          padding: 8px 14px; background: #1a1a2e; color: #e0e0ff;
+          border: 1px solid #3a3a5c; border-radius: 8px; cursor: pointer;
+          font-size: 14px; font-weight: 700;
+        ">지금 다시 시도</button>
+      </div>
+    </div>
+  </div>
+
+  <div id="fadeLayer" class="fade-layer"></div>
+
+
+  <script>
+    // ---- KST(Asia/Seoul) 기준 날짜 계산 유틸 ----
+    function kstNow() {
+      // 어디서 열어도 KST 기준으로 계산되도록 UTC milliseconds에 +9시간 적용
+      return new Date(Date.now() + 9 * 60 * 60 * 1000);
+    }
+    function pad2(n) { return String(n).padStart(2, '0'); }
+    function formatMMDD(d) {
+      // d는 KST 기준으로 만든 Date이므로 UTC getter로 고정
+      var m = d.getUTCMonth() + 1;
+      var day = d.getUTCDate();
+      return m + '/' + pad2(day);
+    }
+    // 이번 주 월~토 날짜 배열 (KST 기준)
+    function getWeekDatesMonToSat() {
+      var now = kstNow();
+      var dow = now.getUTCDay();          // 0=일..6=토
+      var monIndex = (dow + 6) % 7;       // 월=0..일=6
+      var base = new Date(Date.UTC(
+        now.getUTCFullYear(),
+        now.getUTCMonth(),
+        now.getUTCDate()
+      ));
+      base.setUTCDate(base.getUTCDate() - monIndex);
+      var arr = [];
+      for (var i = 0; i < 6; i++) {
+        var d = new Date(base.getTime());
+        d.setUTCDate(base.getUTCDate() + i);
+        arr.push(d);
+      }
+      return arr; // [월..토]
+    }
+    // 오늘 요일을 월=0..일=6 형태로 (KST 기준)
+    function getMonIndexKST() {
+      var now = kstNow();
+      var dow = now.getUTCDay();          // 0=일..6=토
+      return (dow + 6) % 7;               // 월=0..일=6
+    }
+
+    var SHEET_ID = '1dT6o_xh8SpCeDdVOnG9PWTgDJhTTQ53yCv_-m4aybsg';
+    var TABS = ['정기공구', '신선공구'];
+    var DAYS = ['월', '화', '수', '목', '금', '토'];
+    var allEntries = [];
+    var loadedCount = 0;
+    var callbackCount = 0;
+
+    var packageIcon = '<svg class="icon" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M16.5 9.4 7.55 4.24"/><path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"/><polyline points="3.27 6.96 12 12.01 20.73 6.96"/><line x1="12" y1="22.08" x2="12" y2="12"/></svg>';
+    var leafIcon = '<svg class="icon" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M11 20A7 7 0 0 1 9.8 6.9C15.5 4.9 17 3.5 19 2c1 2 2 4.5 2 8 0 5.5-4.78 10-10 10Z"/><path d="M2 21c0-3 1.85-5.36 5.08-6C9.5 14.52 12 13 13 12"/></svg>';
+
+    // ✅ 부드러운 갱신(페이드) + 데이터 재로딩
+    var isLoading = false;
+    var activeScripts = [];
+    var retryTimer = null;
+    var retryCountdownTimer = null;
+    var retryAttempt = 0;
+
+    function showFade(on) {
+      var f = document.getElementById('fadeLayer');
+      if (!f) return;
+      if (on) f.classList.add('show');
+      else f.classList.remove('show');
+    }
+
+    function showStatus(msg, retrySec) {
+      var o = document.getElementById('statusOverlay');
+      var m = document.getElementById('statusMsg');
+      var r = document.getElementById('retryInfo');
+      var btn = document.getElementById('retryNowBtn');
+      if (!o || !m || !r || !btn) return;
+
+      m.textContent = msg || '연결 상태를 확인 중입니다.';
+      if (typeof retrySec === 'number') {
+        r.textContent = '자동 재시도까지 ' + retrySec + '초';
+      } else {
+        r.textContent = '';
+      }
+      o.style.display = 'flex';
+
+      btn.onclick = function() {
+        clearRetryTimers();
+        retryAttempt = 0;
+        o.style.display = 'none';
+        softRefresh(true);
+      };
+    }
+
+    function hideStatus() {
+      var o = document.getElementById('statusOverlay');
+      if (o) o.style.display = 'none';
+    }
+
+    function clearRetryTimers() {
+      if (retryTimer) { clearTimeout(retryTimer); retryTimer = null; }
+      if (retryCountdownTimer) { clearInterval(retryCountdownTimer); retryCountdownTimer = null; }
+    }
+
+    function scheduleRetry(reason) {
+      clearRetryTimers();
+      // 1회: 10초, 2회: 20초, 3회: 40초 ... 최대 300초
+      retryAttempt = Math.min(retryAttempt + 1, 6);
+      var retrySec = Math.min(10 * Math.pow(2, retryAttempt - 1), 300);
+
+      showStatus(reason || '네트워크 오류가 발생했습니다.', retrySec);
+
+      var left = retrySec;
+      retryCountdownTimer = setInterval(function() {
+        left -= 1;
+        if (left <= 0) left = 0;
+        showStatus(reason || '네트워크 오류가 발생했습니다.', left);
+        if (left <= 0) {
+          clearInterval(retryCountdownTimer);
+          retryCountdownTimer = null;
+        }
+      }, 1000);
+
+      retryTimer = setTimeout(function() {
+        hideStatus();
+        softRefresh(true);
+      }, retrySec * 1000);
+    }
+
+    function cleanupScripts() {
+      // JSONP로 추가한 script 태그 누적 방지
+      for (var i = 0; i < activeScripts.length; i++) {
+        try {
+          if (activeScripts[i] && activeScripts[i].parentNode) {
+            activeScripts[i].parentNode.removeChild(activeScripts[i]);
+          }
+        } catch (e) {}
+      }
+      activeScripts = [];
+    }
+
+    function softRefresh(force) {
+      if (isLoading && !force) return;
+      showFade(true);
+      setTimeout(function() {
+        loadData(); // 성공/실패는 콜백/에러핸들러에서 처리
+      }, 150);
+    }
+
+    // ✅ HTML 이스케이프
+    function escapeHtml2(str) {
+      return String(str)
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;');
+    }
+
+
+    
+
+    // ✅ 데이터량(글자수/항목수)에 따라 행 높이를 가변으로 배분
+    // - 월~토 6행은 항상 표시(총합 100%)
+    // - 최소/최대 비중을 두어 한 요일이 과도하게 커지지 않게 함
+    function computeRowHeights(entries) {
+      var heights = [];
+      var scores = [];
+      var minPct = 10;   // 최소 10% (6행이면 최소 60%)
+      var maxPct = 26;   // 최대 26% (한 행이 너무 커지는 것 방지)
+
+      // 점수 계산 (정기/신선 중 더 많은 쪽 기준)
+      for (var i = 0; i < DAYS.length; i++) {
+        var day = DAYS[i];
+        var todayIdx = (function(){
+          var now = new Date(Date.now() + 9 * 60 * 60 * 1000);
+          var dow = now.getUTCDay();
+          return (dow + 6) % 7;
+        })();
+        var isToday = (i === todayIdx);
+        var reg = getContent(entries, day, '정기공구') || '';
+        var fre = getContent(entries, day, '신선공구') || '';
+
+        var regLine = reg.split('\n').filter(function(s){ return s.trim(); }).join(', ');
+        var freLine = fre.split('\n').filter(function(s){ return s.trim(); }).join(', ');
+
+        function scoreText(t) {
+          if (!t) return 0;
+          var items = t.split(',').map(function(s){ return s.trim(); }).filter(Boolean);
+          var itemCount = Math.max(1, items.length);
+          var charCount = t.length;
+          return charCount + Math.max(0, itemCount - 4) * 18;
+        }
+
+        var s = Math.max(scoreText(regLine), scoreText(freLine));
+        // 빈 요일도 최소는 보이게
+        if (s <= 0) s = 35;
+        scores.push(s);
+      }
+
+      // 점수를 1~2.6 정도의 가중치로 변환
+      // (너무 길면 커지고, 짧으면 작아지되 급격하지 않게)
+      var weights = scores.map(function(s) {
+        var w = 1 + Math.min(1.6, Math.max(0, (s - 60) / 140)); // s=60 이하 -> 1, s=284 이상 -> 2.6 근처
+        return w;
+      });
+
+      var sumW = weights.reduce(function(a,b){ return a+b; }, 0);
+      heights = weights.map(function(w){ return (w / sumW) * 100; });
+
+      // 최소/최대 퍼센트 클램프 후 다시 정규화
+      var clamped = heights.map(function(p){ return Math.min(maxPct, Math.max(minPct, p)); });
+      var sumC = clamped.reduce(function(a,b){ return a+b; }, 0);
+      var normalized = clamped.map(function(p){ return (p / sumC) * 100; });
+
+      // 소수점 2자리로 정리
+      return normalized.map(function(p){ return p.toFixed(2); });
+    }
+function parseResponse(json, tabName) {
+      var results = [];
+      var rows = json.table.rows || [];
+      var numCols = json.table.cols ? json.table.cols.length : 0;
+
+      for (var colIdx = 0; colIdx < DAYS.length && colIdx < numCols; colIdx++) {
+        var day = DAYS[colIdx];
+        var items = [];
+        for (var rowIdx = 0; rowIdx < rows.length; rowIdx++) {
+          var cell = rows[rowIdx].c ? rows[rowIdx].c[colIdx] : null;
+          var value = cell ? cell.v : null;
+          if (value && String(value).trim()) {
+            items.push(String(value).trim());
+          }
+        }
+        results.push({
+          category: tabName,
+          dayOfWeek: day,
+          content: items.join('\n')
+        });
+      }
+      return results;
+    }
+
+    function getContent(entries, day, category) {
+      for (var i = 0; i < entries.length; i++) {
+        if (entries[i].dayOfWeek === day && entries[i].category === category) {
+          return entries[i].content;
+        }
+      }
+      return '';
+    }
+
+    
+    // 📱 모바일 카드 렌더링
+    function renderMobile(entries) {
+      var container = document.getElementById('mobileView');
+      if (!container) return;
+
+      var htmlCard = '';
+      for (var i = 0; i < DAYS.length; i++) {
+        var day = DAYS[i];
+        var todayIdx = (function(){
+          var now = new Date(Date.now() + 9 * 60 * 60 * 1000);
+          var dow = now.getUTCDay();
+          return (dow + 6) % 7;
+        })();
+        var isToday = (i === todayIdx);
+        var reg = getContent(entries, day, '정기공구') || '';
+        var fre = getContent(entries, day, '신선공구') || '';
+
+        var regLine = reg.split('\n').filter(function(s){return s.trim();}).join(', ') || '-';
+        var freLine = fre.split('\n').filter(function(s){return s.trim();}).join(', ') || '-';
+
+        htmlCard += '<div class="day-card' + (isToday ? ' today-card' : '') + '">';
+        if (isToday) { htmlCard += '<div class="today-pickup-banner">🔥 오늘 픽업</div>'; }
+        htmlCard += '<h3>' + day + (isToday ? '<span class="today-badge">TODAY</span>' : '') + '</h3>';
+        htmlCard += '<div class="card-section"><strong>정기공구</strong>' + regLine + '</div>';
+        htmlCard += '<div class="card-section"><strong>신선상품</strong>' + freLine + '</div>';
+        htmlCard += '</div>';
+      }
+      container.innerHTML = htmlCard;
+    }
+function renderTable(entries) {
+      var weekDates = getWeekDatesMonToSat();
+      var todayIdx = getMonIndexKST();
+      var highlightIdx = (todayIdx >= 0 && todayIdx <= 5) ? todayIdx : -1;
+      var html = '<table><thead><tr>';
+      html += '<th class="col-day">요일</th>';
+      html += '<th class="col-regular"><div class="th-content">' + packageIcon + 
+    '<span>정기공구상품</span>' +
+    '<div style="font-size: 20px;color:#FFD700;margin-top:4px;">(' + formatMMDD(weekDates[0]) + ' ~ ' + formatMMDD(weekDates[5]) + ')</div>' +
+    '</div></th>';
+      html += '<th class="col-fresh"><div class="th-content">' + leafIcon + '<span>신선상품</span></div></th>';
+      html += '</tr></thead><tbody>';
+
+      var rowHeights = computeRowHeights(entries);
+
+for (var i = 0; i < DAYS.length; i++) {
+        var day = DAYS[i];
+        var todayIdx = (function(){
+          var now = new Date(Date.now() + 9 * 60 * 60 * 1000);
+          var dow = now.getUTCDay();
+          return (dow + 6) % 7;
+        })();
+        var isToday = (i === todayIdx);
+        var trClass = (i === highlightIdx) ? ' class="today-row"' : '';
+        html += '<tr' + trClass + ' style=\"height:' + rowHeights[i] + '%\">';
+        var dateLabel = formatMMDD(weekDates[i]);
+        var isToday = (i === highlightIdx);
+        html += '<td class="day-cell"><div style="display:flex;flex-direction:column;align-items:center;gap:6px;">' +
+                '<span class="day-badge' + (isToday ? ' today' : '') + '">' + day + '</span>' +
+                '<div style="font-size: 20px;color:#aaa;" class="' + (isToday ? 'today-date' : '') + '">' + dateLabel + '</div>' +
+                '</div></td>';
+
+        for (var j = 0; j < TABS.length; j++) {
+          var cat = TABS[j];
+          var content = getContent(entries, day, cat);
+          var display = '';
+          if (content) {
+            display = content.split('\n').filter(function(s) { return s.trim(); }).join(', ');
+          } else {
+            display = '';
+          }
+
+          var cellClass = (cat === '정기공구') ? 'regular' : 'fresh';
+
+          if (display) {
+            html += '<td class="content-cell ' + cellClass + '">' + escapeHtml2(display) + '</td>';
+          } else {
+            html += '<td class="content-cell ' + cellClass + '"><span class="empty-cell">-</span></td>';
+          }
+}
+
+        html += '</tr>';
+      }
+
+      html += '</tbody></table>';
+      return html;
+    }
+
+    function showError(msg) {
+      // 기존 테이블은 유지하고, 오버레이로 오류 안내 + 자동 재시도
+      showFade(false);
+      isLoading = false;
+      scheduleRetry(msg || '네트워크/권한 문제로 데이터를 불러올 수 없습니다.');
+    }
+
+    function handleSheetData(response, tabIndex) {
+      try {
+        var tabName = TABS[tabIndex];
+        var entries = parseResponse(response, tabName);
+        allEntries = allEntries.concat(entries);
+        loadedCount++;
+
+        if (loadedCount === TABS.length) {
+          document.getElementById('tableView').innerHTML = renderTable(allEntries);
+          renderMobile(allEntries);
+          isLoading = false;
+          hideStatus();
+          showFade(false);
+        }
+      } catch (e) {
+        console.error(e);
+        showError('데이터 처리 중 오류가 발생했습니다.');
+      }
+    }
+
+    window.sheetCallback0 = function(response) {
+      callbackCount++;
+      if (response.status === 'error') {
+        showError('정기공구 시트를 불러올 수 없습니다.');
+        return;
+      }
+      handleSheetData(response, 0);
+    };
+
+    window.sheetCallback1 = function(response) {
+      callbackCount++;
+      if (response.status === 'error') {
+        showError('신선공구 시트를 불러올 수 없습니다.');
+        return;
+      }
+      handleSheetData(response, 1);
+    };
+
+    function loadData() {
+      var weekDates = getWeekDatesMonToSat();
+      isLoading = true;
+      cleanupScripts();
+      clearRetryTimers();
+allEntries = [];
+      loadedCount = 0;
+      callbackCount = 0;
+
+      // ✅ 응답 지연 대비 워치독 (8초 안에 응답 없으면 자동 재시도 안내)
+      var loadWatchdog = setTimeout(function() {
+        if (isLoading && loadedCount < TABS.length) {
+          showError('응답이 지연되고 있습니다. 네트워크를 확인해 주세요.');
+        }
+      }, 8000);
+
+      for (var i = 0; i < TABS.length; i++) {
+        var script = document.createElement('script');
+        var url = 'https://docs.google.com/spreadsheets/d/' + SHEET_ID +
+          '/gviz/tq?sheet=' + encodeURIComponent(TABS[i]) +
+          '&range=B2:G20' +
+          '&tqx=responseHandler:sheetCallback' + i;
+        script.src = url;
+        script.onerror = function() {
+          showError('Google 스프레드시트에 연결할 수 없습니다.');
+        };
+        document.body.appendChild(script);
+        activeScripts.push(script);
+      }
+    }
+
+    loadData();
+
+    // 🔄 5분마다 부드럽게 자동 갱신 (페이지 전체 새로고침 대신 데이터만 재로딩)
+    setInterval(function() {
+      softRefresh();
+    }, 300000);
+  </script>
+</body>
+</html>
