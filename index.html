@@ -243,10 +243,89 @@
         display: none;
       }
     }
-</style>
+
+    /* 📱 모바일 카드형 UI */
+    @media (max-width: 768px) {
+      #tableView { display: none; }
+      #mobileView { display: block; padding: 6px; }
+    }
+    @media (min-width: 769px) {
+      #mobileView { display: none; }
+    }
+
+    .day-card {
+      background: #111;
+      border: 1px solid #2a2a4a;
+      border-radius: 10px;
+      padding: 12px;
+      margin-bottom: 12px;
+    }
+    .day-card h3 {
+      margin: 0 0 8px 0;
+      font-size: 16px;
+      color: #FFD700;
+    }
+    .card-section {
+      margin-bottom: 6px;
+      font-size: 14px;
+      line-height: 1.4;
+    }
+    .card-section strong {
+      display: block;
+      font-size: 13px;
+      margin-bottom: 3px;
+      color: #aaa;
+    }
+
+  
+    
+    /* 📱 오늘 카드 강화 스타일 */
+    .day-card.today-card {
+      border: 2px solid #FFD700;
+      background: linear-gradient(180deg, #2a2200 0%, #141100 100%);
+      box-shadow: 0 0 22px rgba(255, 215, 0, 0.35);
+    }
+    .day-card.today-card h3 {
+      color: #FFD700;
+      font-weight: 900;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+    }
+    .today-badge {
+      background: #FFD700;
+      color: #000;
+      font-size: 11px;
+      font-weight: 900;
+      padding: 3px 6px;
+      border-radius: 20px;
+    }
+    .day-card.today-card .card-section {
+      font-weight: 800;
+      color: #FFF3B0;
+    }
+
+
+  
+    /* 📱 오늘 픽업 배너 */
+    .today-pickup-banner {
+      background: linear-gradient(90deg, #FFD700, #FFC300);
+      color: #000;
+      font-size: 12px;
+      font-weight: 900;
+      text-align: center;
+      padding: 4px 0;
+      border-radius: 6px;
+      margin-bottom: 6px;
+      letter-spacing: 0.5px;
+    }
+
+  </style>
 </head>
 <body>
   <div class="container" id="app">
+    <div id="tableView"></div>
+    <div id="mobileView"></div>
     <div class="loading">데이터를 불러오는 중...</div>
   </div>
 
@@ -445,6 +524,12 @@
       // 점수 계산 (정기/신선 중 더 많은 쪽 기준)
       for (var i = 0; i < DAYS.length; i++) {
         var day = DAYS[i];
+        var todayIdx = (function(){
+          var now = new Date(Date.now() + 9 * 60 * 60 * 1000);
+          var dow = now.getUTCDay();
+          return (dow + 6) % 7;
+        })();
+        var isToday = (i === todayIdx);
         var reg = getContent(entries, day, '정기공구') || '';
         var fre = getContent(entries, day, '신선공구') || '';
 
@@ -516,7 +601,37 @@ function parseResponse(json, tabName) {
       return '';
     }
 
-    function renderTable(entries) {
+    
+    // 📱 모바일 카드 렌더링
+    function renderMobile(entries) {
+      var container = document.getElementById('mobileView');
+      if (!container) return;
+
+      var htmlCard = '';
+      for (var i = 0; i < DAYS.length; i++) {
+        var day = DAYS[i];
+        var todayIdx = (function(){
+          var now = new Date(Date.now() + 9 * 60 * 60 * 1000);
+          var dow = now.getUTCDay();
+          return (dow + 6) % 7;
+        })();
+        var isToday = (i === todayIdx);
+        var reg = getContent(entries, day, '정기공구') || '';
+        var fre = getContent(entries, day, '신선공구') || '';
+
+        var regLine = reg.split('\n').filter(function(s){return s.trim();}).join(', ') || '-';
+        var freLine = fre.split('\n').filter(function(s){return s.trim();}).join(', ') || '-';
+
+        htmlCard += '<div class="day-card' + (isToday ? ' today-card' : '') + '">';
+        if (isToday) { htmlCard += '<div class="today-pickup-banner">🔥 오늘 픽업</div>'; }
+        htmlCard += '<h3>' + day + (isToday ? '<span class="today-badge">TODAY</span>' : '') + '</h3>';
+        htmlCard += '<div class="card-section"><strong>정기공구</strong>' + regLine + '</div>';
+        htmlCard += '<div class="card-section"><strong>신선상품</strong>' + freLine + '</div>';
+        htmlCard += '</div>';
+      }
+      container.innerHTML = htmlCard;
+    }
+function renderTable(entries) {
       var weekDates = getWeekDatesMonToSat();
       var todayIdx = getMonIndexKST();
       var highlightIdx = (todayIdx >= 0 && todayIdx <= 5) ? todayIdx : -1;
@@ -533,6 +648,12 @@ function parseResponse(json, tabName) {
 
 for (var i = 0; i < DAYS.length; i++) {
         var day = DAYS[i];
+        var todayIdx = (function(){
+          var now = new Date(Date.now() + 9 * 60 * 60 * 1000);
+          var dow = now.getUTCDay();
+          return (dow + 6) % 7;
+        })();
+        var isToday = (i === todayIdx);
         var trClass = (i === highlightIdx) ? ' class="today-row"' : '';
         html += '<tr' + trClass + ' style=\"height:' + rowHeights[i] + '%\">';
         var dateLabel = formatMMDD(weekDates[i]);
@@ -583,7 +704,8 @@ for (var i = 0; i < DAYS.length; i++) {
         loadedCount++;
 
         if (loadedCount === TABS.length) {
-          document.getElementById('app').innerHTML = renderTable(allEntries);
+          document.getElementById('tableView').innerHTML = renderTable(allEntries);
+          renderMobile(allEntries);
           isLoading = false;
           hideStatus();
           showFade(false);
