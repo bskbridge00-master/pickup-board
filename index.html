@@ -111,9 +111,12 @@
     .th-content { display: flex; align-items: center; justify-content: center; gap: 8px; }
     .icon { width: 20px; height: 20px; }
     .help-text { font-size: 14px; color: #888; line-height: 1.8; text-align: center; }
-  
-    /* ✅ 오늘(현재 요일) 하이라이트: 요일 칸만 강조 */
-    td.day-cell.today-day {
+
+    /* ✅ 오늘(현재 요일) 하이라이트: 해당 요일(행) 전체 강조 */
+    tr.today-row td {
+      background: rgba(138, 138, 255, 0.10);
+    }
+    tr.today-row td.day-cell {
       background: rgba(138, 138, 255, 0.18);
     }
     .day-badge.today {
@@ -121,12 +124,13 @@
       background-color: #2a2a4a;
       color: #e0e0ff;
     }
+    /* 오늘 날짜 라벨도 살짝 강조 */
     .today-date {
       color: #e0e0ff !important;
       font-weight: 700;
     }
 
-  </style>
+</style>
 </head>
 <body>
   <div id="weekTitle" style="text-align:center;color:#e0e0ff;font-size:22px;margin:6px 0 10px;"></div>
@@ -230,10 +234,11 @@
 
       for (var i = 0; i < DAYS.length; i++) {
         var day = DAYS[i];
-        html += '<tr style="height:' + rowHeight + '%">';
+        var trClass = (i === highlightIdx) ? ' class="today-row"' : '';
+        html += '<tr' + trClass + ' style="height:' + rowHeight + '%">';
         var dateLabel = formatMMDD(weekDates[i]);
         var isToday = (i === highlightIdx);
-        html += '<td class="day-cell' + (isToday ? ' today-day' : '') + '"><div style="display:flex;flex-direction:column;align-items:center;gap:6px;">' +
+        html += '<td class="day-cell'"><div style="display:flex;flex-direction:column;align-items:center;gap:6px;">' +
                 '<span class="day-badge' + (isToday ? ' today' : '') + '">' + day + '</span>' +
                 '<div style="font-size:16px;color:#aaa;" class="' + (isToday ? 'today-date' : '') + '">' + dateLabel + '</div>' +
                 '</div></td>';
